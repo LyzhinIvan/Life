@@ -1,140 +1,52 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Drawing;
-using System.IO;
-using NUnit.Framework;
 
 namespace Life1
 {
     public class Game
     {
-        public int Width { get; private set; }
-        public int Height { get; private set; }
-        public bool[,] Field { get; private set; }
-    
+        public HashSet<Point> LiveCells { get; private set; }
 
-        public Game(int width, int height, params Point[] startPoints)
+        public Game(params Point[] startLiveCells)
         {
-            if (width == 0 || height == 0) throw new Exception("Размер не может быть нулевым!!!");
-
-            Width = width;
-            Height = height;
-            Field = new bool[Height, Width];
-            foreach (var point in startPoints)
-            {
-                Field[point.X, point.Y] = true;
-            }
+            LiveCells = new HashSet<Point>(startLiveCells);
         }
 
-        public bool this[int row, int column]
+        public void Update()
         {
-            get { return Field[row, column]; }
+            LiveCells = NextState();
         }
 
-        public void NextStep()
+        private HashSet<Point> NextState()
         {
-            bool[,] nextField = new bool[Height, Width];
-            for(int i=0; i<Height; ++i)
-                for (int j = 0; j < Width; ++j)
-                {
-                    nextField[i, j] = Field[i, j];
-                    var tempP = CountNeighbours(new Point(i, j));
-
-                    if (Field[i, j] == true && tempP < 2)
-                    {
-                        nextField[i, j] = false;
-                    }
-                    if (Field[i, j] == true && tempP > 3)
-                    {
-                        nextField[i, j] = false;
-                    }
-
-                    if (Field[i, j] == false && tempP == 3)
-                    {
-                        nextField[i, j] = true;
-                    }
-                }
-            Field = nextField;
+            var nextState = new HashSet<Point>();
+            foreach (var cell in LiveCells.SelectMany(GetNearCells).Where(WillCellLive)) nextState.Add(cell);
+            return nextState;
         }
 
-        private int CountNeighbours(Point p)
+        private IEnumerable<Point> GetNearCells(Point cell)
         {
-            int count = 0;
-            for(int i=-1; i<=1; i++)
-                for (int j = -1; j <= 1; j++)
-                {
-                    if(i==0 && j==0) continue;
-                    if (CheckBounds(new Point(p.X + i, p.Y + j)))
-                        count += (Field[p.X + i, p.Y + j] ? 1 : 0);
-                }
-            return count;
+            var d = new[] {-1, 0, 1};
+            return (from dx in d from dy in d select new Point(cell.X + dx, cell.Y + dy)).ToList();
         }
 
-        private bool CheckBounds(Point p)
+        private int CountNearLiveCells(Point cell)
         {
-            return p.X >= 0 && p.X < Width && p.Y >= 0 && p.Y < Height;
+            var count = GetNearCells(cell).Where(LiveCells.Contains).Count();
+            return LiveCells.Contains(cell) ? count - 1 : count;
         }
 
-        public void PrintField(TextWriter tw)
+        private bool WillCellLive(Point cell)
         {
-            for (int i = 0; i < Height; ++i)
-            {
-                for (int j = 0; j < Width; ++j)
-                {
-                    tw.Write(Field[i, j] ? "X" : "0");
-                }
-                tw.Write("\n");
-            }
-        }
-    }
-
-    public class Point
-    {
-        public int X { get; private set; }
-        public int Y { get; private set; }
-
-        public Point(int x, int y)
-        {
-            X = x;
-            Y = y;
-        }
-    }
-
-    [TestFixture]
-    public class Game_should
-    {
-        [Test]
-        public void NotChangeEmptyField()
-        {
-            Game game = new Game(2, 2);
-            game.NextStep();
-            for(int i=0; i<game.Height; ++i)
-                for (int j = 0; j < game.Width; ++j)
-                    Assert.That(game[i, j], Is.EqualTo(false));
+            var count = CountNearLiveCells(cell);
+            if (LiveCells.Contains(cell) && (count == 2 || count == 3)) return true;
+            return !LiveCells.Contains(cell) && count == 3;
         }
 
-        [Test]
-        [TestCase(0,0)]
-        [TestCase(0,5)]
-        [TestCase(5,0)]
-        public void ThrowExceptionIfSizeZero(int width, int height)
-        {
-            Assert.Throws<Exception>(() => new Game(width, height));
-        }
-
-        [Test]
-        public void NotChangeBlock()
-        {
-            var game = new Game(4, 4, new Point(1, 1), new Point(1, 2), new Point(2, 1), new Point(2, 2));
-            var startField = game.Field;
-            game.NextStep();
-            for(int i=0; i<game.Height; ++i)
-                for (int j = 0; j < game.Width; ++j)
-                    Assert.That(game[i, j], Is.EqualTo(startField[i, j]));
-            
-        }
+        
     }
 }
